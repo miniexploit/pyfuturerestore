@@ -2,7 +2,6 @@ from m1n1Exception import *
 import os
 import time
 import plistlib
-import pyimg4
 import logging
 from pyfuturerestore.ipsw import IPSW
 from pyfuturerestore import api
@@ -142,14 +141,7 @@ class PyFuturerestore:
 			print("Device is already in Recovery mode, no need to enter it again")
 			return
 		elif self.initMode == Mode.DFU_MODE:
-			ibss = ipsw.readIPSWComponent("iBSS")
-			ibss = pyimg4.IMG4(im4p=ibss, im4m=self.im4m).output()
-			print("Sending iBSS")
-			self.irecv.send_buffer(ibss)
-			ibec = ipsw.readIPSWComponent("iBEC")
-			ibec = pyimg4.IMG4(im4p=ibec, im4m=self.im4m).output()
-			print("Sending iBEC")
-			self.irecv.send_buffer(ibec)
+			reterror("Device is in unsupported mode. Please connect the device in Normal or Recovery mode")
 		elif self.initMode == Mode.NORMAL_MODE:
 			retassure(self.lockdownCli, "lockdown client has not been created, cannot enter Recovery Mode from Normal Mode")
 			self.lockdownCli.enter_recovery()
@@ -171,7 +163,6 @@ class PyFuturerestore:
 		retassure(self.basebandbuildmanifest, "Baseband was not loaded")
 		self.enterRecovery(ipsw)
 		print("About to restore device")
-		print(self.lockdownCli)
 		time.sleep(5)
 		#try:
 		restore.Restore(ipsw._BytesIO(), self.device, tss=self.tss, sepfwdata=self.sepfwdata, bbfwdata=self.bbfwdata, sepbuildmanifest=self.sepbuildmanifest, basebandbuildmanifest=self.basebandbuildmanifest, behavior=Behavior.Erase).update()
