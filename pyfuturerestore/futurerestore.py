@@ -4,7 +4,7 @@ import time
 import plistlib
 import logging
 from pyfuturerestore.ipsw import IPSW
-from pyfuturerestore import api
+from pyfuturerestore import download
 from pymobiledevice3.irecv import IRecv, Mode
 from pymobiledevice3.lockdown import LockdownClient
 from pymobiledevice3.restore.device import Device
