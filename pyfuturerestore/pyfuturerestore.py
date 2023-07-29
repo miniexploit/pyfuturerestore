@@ -43,7 +43,7 @@ from pymobiledevice3.restore.recovery import Behavior, Recovery
 from pymobiledevice3.restore.restore_options import RestoreOptions
 from pymobiledevice3.restore.restored_client import RestoredClient
 from pymobiledevice3.restore.tss import TSSRequest, TSSResponse
-from pymobiledevice3.service_connection import ServiceConnection
+from pymobiledevice3.service_connection import LockdownServiceConnection
 from pymobiledevice3.utils import plist_access_path
 import os
 
@@ -54,7 +54,17 @@ def load_custom_manifest(self, custom_manifest):
 
 IPSW.load_custom_manifest = load_custom_manifest
 
+def RestoredClient__init__(self, udid=None, client_name=RestoredClient.DEFAULT_CLIENT_NAME):
+    self.logger = logging.getLogger(__name__)
+    self.udid = self._get_or_verify_udid(udid)
+    self.service = LockdownServiceConnection.create_using_usbmux(self.udid, self.SERVICE_PORT, connection_type='USB')
+    self.label = client_name
+    self.query_type = self.service.send_recv_plist({'Request': 'QueryType'})
+    self.version = self.query_type.get('RestoreProtocolVersion')
 
+    assert self.query_type.get('Type') == 'com.apple.mobile.restored', f'wrong query type: {self.query_type}'
+
+RestoredClient.__init__ = RestoredClient__init__
 def BaseRestore__init__(self, ipsw: ZipFile, device: Device, tss: typing.Mapping = None, sepfw=None, sepbm=None, bbfw=None, bbbm=None,
              behavior: Behavior = Behavior.Update, logger=None):
     self.logger = logging.getLogger(self.__class__.__name__) if logger is None else logger
@@ -284,7 +294,7 @@ def Restore__init__(self, ipsw: zipfile.ZipFile, device: Device, tss=None, sepfw
 
     # used when ignore_fdr=True, to store an active FDR connection just to make the device believe it can actually
     # perform an FDR communication, but without really establishing any
-    self._fdr: Optional[ServiceConnection] = None
+    self._fdr: Optional[LockdownServiceConnection] = None
     self._ignore_fdr = ignore_fdr
 
     # query preflight info while device may still be in normal mode
