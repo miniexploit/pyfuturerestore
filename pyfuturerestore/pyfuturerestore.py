@@ -18,6 +18,7 @@ from ipsw_parser.exceptions import NoSuchBuildIdentityError
 from pymobiledevice3.usbmux import list_devices
 from pymobiledevice3.lockdown import LockdownClient, create_using_usbmux
 from pymobiledevice3.restore.restored_client import RestoredClient
+import tqdm
 from remotezip import RemoteZip
 from io import BytesIO
 import zipfile
@@ -835,9 +836,20 @@ class PyFuturerestore:
         self.device = Device(irecv=self.irecv, lockdown=self.lockdown_cli)
 
     def download_buffer(self, url, pz_path):
+        data: bytes = b''
         try:
             with RemoteZip(url) as z:
-                return z.read(pz_path)
+                size = -1
+                for file in z.infolist():
+                    if file.filename == pz_path:
+                        size = file.file_size
+                retassure(size != -1, f'Could not find {pz_path} in the latest firmware')
+                with tqdm.tqdm(total=size) as pb:
+                    with z.open(pz_path, 'r') as f:
+                        for byte in f:
+                            pb.update(len(byte))
+                            data += byte
+                return data
         except:
             return -1
 
