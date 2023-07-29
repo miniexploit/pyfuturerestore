@@ -17,6 +17,7 @@ from time import sleep
 from ipsw_parser.exceptions import NoSuchBuildIdentityError
 from pymobiledevice3.usbmux import list_devices
 from pymobiledevice3.lockdown import LockdownClient, create_using_usbmux
+from pymobiledevice3.restore.restored_client import RestoredClient
 from remotezip import RemoteZip
 from io import BytesIO
 import zipfile
@@ -52,6 +53,19 @@ def load_custom_manifest(self, custom_manifest):
     self._build_manifest = BuildManifest(self, custom_manifest)
 
 IPSW.load_custom_manifest = load_custom_manifest
+
+
+def RestoredClient__init__(self, udid=None, client_name=RestoredClient.DEFAULT_CLIENT_NAME):
+    self.logger = logging.getLogger(__name__)
+    self.udid = self._get_or_verify_udid(udid)
+    self.service = ServiceConnection.create_using_usbmux(self.udid, self.SERVICE_PORT, connection_type='USB')
+    self.label = client_name
+    self.query_type = self.service.send_recv_plist({'Request': 'QueryType'})
+    self.version = self.query_type.get('RestoreProtocolVersion')
+
+    assert self.query_type.get('Type') == 'com.apple.mobile.restored', f'wrong query type: {self.query_type}'
+
+RestoredClient.__init__ = RestoredClient__init__
 def BaseRestore__init__(self, ipsw: ZipFile, device: Device, tss: typing.Mapping = None, sepfw=None, sepbm=None, bbfw=None, bbbm=None,
              behavior: Behavior = Behavior.Update, logger=None):
     self.logger = logging.getLogger(self.__class__.__name__) if logger is None else logger
