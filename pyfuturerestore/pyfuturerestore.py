@@ -53,8 +53,6 @@ import os
 def load_custom_manifest(self, custom_manifest):
     self._build_manifest = BuildManifest(self, custom_manifest)
 
-IPSW.load_custom_manifest = load_custom_manifest
-
 def RestoredClient__init__(self, udid=None, client_name=RestoredClient.DEFAULT_CLIENT_NAME):
     self.logger = logging.getLogger(__name__)
     self.udid = self._get_or_verify_udid(udid)
@@ -65,7 +63,6 @@ def RestoredClient__init__(self, udid=None, client_name=RestoredClient.DEFAULT_C
 
     assert self.query_type.get('Type') == 'com.apple.mobile.restored', f'wrong query type: {self.query_type}'
 
-RestoredClient.__init__ = RestoredClient__init__
 def BaseRestore__init__(self, ipsw: ZipFile, device: Device, tss: typing.Mapping = None, sepfw=None, sepbm=None, bbfw=None, bbbm=None,
              behavior: Behavior = Behavior.Update, logger=None):
     self.logger = logging.getLogger(self.__class__.__name__) if logger is None else logger
@@ -127,8 +124,6 @@ def BaseRestore__init__(self, ipsw: ZipFile, device: Device, tss: typing.Mapping
     device_class = build_info.get('DeviceClass')
     if device_class is None:
         raise PyMobileDevice3Exception('build identity does not contain an "DeviceClass" element')
-
-BaseRestore.__init__ = BaseRestore__init__
 
 def Recovery__init__(self, ipsw: BytesIO, device: Device,
                      tss: typing.Mapping = None, sepfw=None, sepbm=None, bbfw=None, bbbm=None, rdskdata=None, rkrndata=None, behavior: Behavior = Behavior.Update):
@@ -275,12 +270,6 @@ def send_component(self, name: str):
         data = self.build_identity.get_component(name, tss=tss, data=data).personalized_data
     self.logger.info(f'Sending {name} ({len(data)} bytes)...')
     self.device.irecv.send_buffer(data)
-
-Recovery.__init__ = Recovery__init__
-Recovery.get_tss_response = get_tss_response
-Recovery.send_ramdisk = send_ramdisk
-Recovery.send_kernelcache = send_kernelcache
-Recovery.send_component = send_component
 
 
 def Restore__init__(self, ipsw: zipfile.ZipFile, device: Device, tss=None, sepfw=None, sepbm=None, bbfw=None, bbbm=None, rdskdata=None, rkrndata=None, fwcomps: dict = None, behavior: Behavior = Behavior.Update,
@@ -677,7 +666,14 @@ def get_se_firmware_data(self, info: Mapping):
 
     return response
 
-
+IPSW.load_custom_manifest = load_custom_manifest
+RestoredClient.__init__ = RestoredClient__init__
+BaseRestore.__init__ = BaseRestore__init__
+Recovery.__init__ = Recovery__init__
+Recovery.get_tss_response = get_tss_response
+Recovery.send_ramdisk = send_ramdisk
+Recovery.send_kernelcache = send_kernelcache
+Recovery.send_component = send_component
 Restore.__init__ = Restore__init__
 Restore.send_baseband_data = send_baseband_data
 Restore.send_nor = send_nor
@@ -792,6 +788,7 @@ class PyFuturerestore:
                         continue
                     if device.idVendor == 0x05ac:
                         mode = Mode.get_mode_from_value(device.idProduct)
+                        if device.idProduct == 0x12a8:  return Mode.NORMAL_MODE
                         if mode is None:    continue
                         return mode
                 except ValueError:
@@ -809,6 +806,7 @@ class PyFuturerestore:
                             continue
                         if device.idVendor == 0x05ac:
                             mode = Mode.get_mode_from_value(device.idProduct)
+                            if device.idProduct == 0x12a8:  return Mode.NORMAL_MODE
                             if mode is None:    continue
                             return mode
                     except ValueError:
@@ -839,17 +837,18 @@ class PyFuturerestore:
         data: bytes = b''
         try:
             with RemoteZip(url) as z:
-                size = -1
-                for file in z.infolist():
-                    if file.filename == pz_path:
-                        size = file.file_size
-                retassure(size != -1, f'Could not find {pz_path} in the latest firmware')
-                with tqdm.tqdm(total=size) as pb:
-                    with z.open(pz_path, 'r') as f:
-                        for byte in f:
-                            pb.update(len(byte))
-                            data += byte
-                return data
+                # size = -1
+                # for file in z.infolist():
+                #     if file.filename == pz_path:
+                #         size = file.file_size
+                # retassure(size != -1, f'Could not find {pz_path} in the latest firmware')
+                # with tqdm.tqdm(total=size) as pb:
+                #     with z.open(pz_path, 'r') as f:
+                #         for byte in f:
+                #             pb.update(len(byte))
+                #             data += byte
+                # return data
+                return z.read(pz_path)
         except:
             return -1
 
@@ -991,7 +990,7 @@ class PyFuturerestore:
         self._bootargs = bootargs
 
     def load_ramdisk(self, path):
-        retassure(os.path.isfile(path), f'Ramdisk not found at {path}')
+        retassure(os.path.isfile(path), f'RestoreRamdisk not found at {path}')
         self.logger.warning('Custom RestoreRamdisk won\'t be verified')
         with open(path, 'rb') as f:
             self.ramdiskdata = f.read()
@@ -1017,6 +1016,7 @@ class PyFuturerestore:
         else:
             reterror('Device is in unsupported mode')
         self.logger.info('Waiting for device to enter Recovery Mode')
+        self.init()
         self.reconnect_irecv(is_recovery=True)
 
     def exit_recovery(self):
@@ -1025,6 +1025,7 @@ class PyFuturerestore:
                   "--exit-recovery was specified, but device is not in Recovery mode")
         self.irecv.set_autoboot(True)
         self.irecv.reboot()
+
     def get_ap_nonce_from_im4m(self):
         if isinstance(self.im4m, pyimg4.IM4M):
             return self.im4m.apnonce.hex()
@@ -1163,13 +1164,13 @@ class PyFuturerestore:
         retassure(self.sepfw, 'SEP was not loaded')
         retassure(self.sepbm, 'SEP BuildManifest was not loaded')
         restore = Restore(self.zipipsw, self.device, tss=self.tss, behavior=Behavior.Erase)
-        self.enter_recovery()
         self.logger.info('Checking if the APTicket is valid for this restore')
         if not self.skip_blob:
             retassure(self.irecv.ecid == self.im4m.ecid, 'Device\'s ECID does not match APTicket\'s ECID')
             self.logger.info('Verified ECID in APTicket matches the device\'s ECID')
         else:
             self.logger.warning('NOT VALIDATING SHSH BLOBS ECID!')
+        self.enter_recovery()
         if self.pwndfu:
             if self._bootargs:
                 bootargs = self._bootargs
