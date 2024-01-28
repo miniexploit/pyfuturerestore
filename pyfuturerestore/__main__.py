@@ -30,11 +30,7 @@ def _main():
     parser.add_argument('--no-cache', help='Disable cached patched iBSS/iBEC (requires use-pwndfu)',action='store_true')
     parser.add_argument('--skip-blob',help='Skip SHSH blob validation (PROCEED WITH CAUTION) (requires use-pwndfu)',action='store_true')
     parser.add_argument('--latest-sep',help='Use latest signed SEP instead of manually specifying one',action='store_true')
-    parser.add_argument('-s', '--sep', metavar='PATH', nargs=1, help='SEP to be flashed')
-    parser.add_argument('-m','--sep-manifest',metavar='PATH',nargs=1,help='BuildManifest for requesting SEP ticket')
     parser.add_argument('--latest-baseband',help='Use latest signed Baseband instead of manually specifying one',action='store_true')
-    parser.add_argument('-b','--baseband',metavar='PATH',nargs=1,help='Baseband to be flashed')
-    parser.add_argument('-p','--baseband-manifest',metavar='PATH',nargs=1,help='BuildManifest for requesting baseband ticket')
     parser.add_argument('--no-baseband',help='Skip checks and don\'t flash baseband',action='store_true')
     parser.add_argument('-d', '--debug',help='More debug information during restore',action='store_true')
     parser.add_argument('--usb-backend',metavar='PATH',help='Customize USB backend for use',nargs=1)
@@ -42,26 +38,9 @@ def _main():
     args = parser.parse_args()
     logger = get_my_logger(args.debug, name='pyfuturerestore')
     # args checks
-    retassure(args.sep or args.latest_sep, 'SEP was not specified')
+    retassure(args.latest_sep, 'SEP was not specified')
     if not args.no_baseband:
-        retassure(args.baseband or args.latest_baseband, 'Baseband was not specified')
-    if args.latest_sep:
-        retassure(not args.sep, 'can\'t specify --latest-sep and -s/--sep at once')
-    if args.sep:
-        retassure(not args.latest_sep, 'can\'t specify --latest-sep and -s/--sep at once')
-    if args.latest_baseband:
-        retassure(not args.baseband, 'can\'t specify --latest-baseband and -b/--baseband at once')
-    if args.baseband:
-        retassure(not args.latest_baseband, 'can\'t specify --latest-baseband and -b/--baseband at once')
-
-    if args.sep:
-        retassure(args.sep_manifest, '-s/--sep requires -m/--sep-manifest')
-    if args.sep_manifest:
-        retassure(args.sep, '-m/--sep-manifest requires -s/--sep')
-    if args.baseband:
-        retassure(args.baseband_manifest, '-b/--baseband requires -p/--baseband-manifest')
-    if args.baseband_manifest:
-        retassure(args.baseband, ' -p/--baseband-manifest requires -b/--baseband')
+        retassure(args.latest_baseband, 'Baseband was not specified')
     if args.rdsk:
         retassure(args.use_pwndfu, '--rdsk requires --use-pwndfu')
     if args.rkrn:
@@ -77,7 +56,7 @@ def _main():
     if not args.set_nonce:
         args.set_nonce = blank()
     ipsw = ZipFile(args.ipsw[0])
-    client = PyFuturerestore(ipsw, logger, setnonce=isinstance(args.set_nonce, blank), serial=args.serial, custom_gen=args.set_nonce[0] if not isinstance(args.set_nonce, blank) else None, ignore_nonce_matching=args.ignore_nonce_matching, noibss=args.no_ibss, skip_blob=args.skip_blob, pwndfu=args.use_pwndfu, custom_usb_backend=args.usb_backend[0] if args.usb_backend else None, no_cache=args.no_cache, verbose=args.debug)
+    client = PyFuturerestore(ipsw, logger, setnonce=(not isinstance(args.set_nonce, blank)), serial=args.serial, custom_gen=args.set_nonce[0] if not isinstance(args.set_nonce, blank) else None, ignore_nonce_matching=args.ignore_nonce_matching, noibss=args.no_ibss, skip_blob=args.skip_blob, pwndfu=args.use_pwndfu, custom_usb_backend=args.usb_backend[0] if args.usb_backend else None, no_cache=args.no_cache, verbose=args.debug)
     client.init()
     logger.info('pyfuturerestore init done')
     if args.exit_recovery:
@@ -86,13 +65,6 @@ def _main():
         return
     client.load_ap_ticket(args.apticket[0])
 
-    if args.latest_sep:
-        client.load_latest_sep()
-    else:
-        retassure(os.path.isfile(args.sep[0]), f'SEP firmware not found at {args.sep[0]}')
-        retassure(os.path.isfile(args.sep_manifest[0]), f'SEP BuildManifest not found at {args.sep_manifest[0]}')
-        with open(args.sep[0], 'rb') as sep, open(args.sep_manifest[0], 'rb') as sepbm:
-            client.load_sep(sep.read(), sepbm.read())
     if args.no_baseband:
         logger.warning('User specified is not to flash a baseband. This can make the restore fail if the device needs a baseband!')
         i = 10
@@ -102,14 +74,6 @@ def _main():
             i -= 1
             sleep(1)
         print('')
-    else:
-        if args.latest_baseband:
-            client.load_latest_baseband()
-        else:
-            retassure(os.path.isfile(args.baseband[0]), f'Baseband firmware not found at {args.baseband[0]}')
-            retassure(os.path.isfile(args.baseband_manifest[0]), f'Baseband BuildManifest not found at {args.baseband_manifest[0]}')
-            with open(args.baseband[0], 'rb') as bb, open(args.baseband_manifest[0], 'rb') as bbbm:
-                client.load_baseband(bb.read(), bbbm.read())
 
     if args.rdsk:
         client.load_ramdisk(args.rdsk[0])
@@ -117,8 +81,6 @@ def _main():
         client.load_rkrn(args.rkrn[0])
     if args.boot_args:
         client.set_bootargs(args.boot_args[0])
-    if client.irecv.is_image4_supported:
-        client.download_latest_fw_components()
 
     try:
         client.do_restore()

@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "pyfuturerestore"
-version = "0.1.0"
+version = "1.0.0"
 description = "A re-implementation of futurerestore in Python"
 authors = ["Mini-Exploit <miniexploitttt@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 pyipatcher = "^2.0.1"
 pymobiledevice3 = "^2.0.2"
 pyimg4 = "^0.7"

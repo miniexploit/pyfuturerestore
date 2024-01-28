@@ -2,4 +2,4 @@
 
 rm -r dist
 poetry build
-python3 -m pip install $(ls dist/*.tar.gz)
+python3.11 -m pip install $(ls dist/*.tar.gz)
